@@ -1,148 +1,96 @@
-
 import { useState, useEffect } from 'react';
-import { getContacts, addContact, updateContact,deleteContact } from './component/axxioss';
-import FilterComponent from './component/filter';
-import PersonForm from './component/personform';
-import Persons from './component/persons';
-import './index.css';
-import Notification from './component/alerta';
+import axios from 'axios';
 
-const App = () => {
-  const [persons, setPersons] = useState([]);
-  const [newName, setNewName] = useState('');
-  const [newNumber, setNewNumber] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [modedit, setModEdit] = useState(false);
-  const [personToUpdate, setPersonToUpdate] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null)
+const WeatherReport = ({ capital }) => {
+  const [weather, setWeather] = useState(null);
 
   useEffect(() => {
-    getContacts().then(initialPersons => {
-      setPersons(initialPersons);
-    });
+    const api_key = import.meta.env.VITE_SOME_KEY
+
+    axios
+      .get(`http://api.openweathermap.org/data/2.5/weather?q=${capital}&appid=${api_key}`)
+      .then(response => {
+        setWeather(response.data);
+      });
+  }, [capital]);
+
+  if (!weather) {
+    return <p>Loading weather...</p>;
+  }
+  const iconUrl = `http://openweathermap.org/img/w/${weather.weather[0].icon}.png`;
+  return (
+    <div>
+      <h3>Weather in {capital}</h3>
+      <img src={iconUrl} alt="Weather icon" />
+      <p><strong>temperature:</strong> {weather.main.temp} K</p>
+      <p><strong>wind:</strong> {weather.wind.speed} m/s</p>
+    </div>
+  );
+};
+
+const CountryDetails = ({ country }) => (
+  <div>
+    <h2>{country.name.common}</h2>
+    <p>Capital: {country.capital}</p>
+    <p>Population: {country.population}</p>
+    <p>Languages: {Object.values(country.languages).join(', ')}</p>
+    <img src={country.flags.png} alt="Country flag" />
+    <WeatherReport capital={country.capital} />
+  </div>
+);
+const App = () => {
+  const [countries, setCountries] = useState([]);
+  const [search, setSearch] = useState('');
+  const [selectedCountry, setSelectedCountry] = useState(null);
+
+  useEffect(() => {
+    axios
+      .get('https://studies.cs.helsinki.fi/restcountries/api/all')
+      .then(response => {
+        setCountries(response.data);
+      });
   }, []);
 
-  const updatePerson = (id, personObject) => {
-    return updateContact(id, personObject)
-      .then(returnedPerson => {
-        setPersons(persons.map(person => person.id !== id ? person : returnedPerson))
-        return returnedPerson;
-      })
-      .catch(error => {
-        alert(`El contacto '${personObject.name}' ya fue eliminado del servidor`)
-        setPersons(persons.filter(n => n.id !== id))
-        throw error;
-      });
-  };
-  
-  const addOrUpdatePerson = (event) => {
-    event.preventDefault();
-    if (modedit && personToUpdate) {
-      // Verificar si el contacto aún existe
-      const personExists = persons.find(person => person.id === personToUpdate.id);
-      if (personExists) {
-        const updatedPerson = { ...personToUpdate, name: newName, number: newNumber };
-        updatePerson(personToUpdate.id, updatedPerson)
-          .then(() => {
-            setModEdit(false);
-            setPersonToUpdate(null);
-            setNewName('');
-            setNewNumber('');
-          })
-          .catch(error => console.error(error));
-      } else {
-        setErrorMessage(`El contacto ya fue eliminado del servidor`);
-        setTimeout(() => {
-          setErrorMessage(null);
-        }, 5000);
-        setModEdit(false);
-        setPersonToUpdate(null);
-        setNewName('');
-        setNewNumber('');
-      }
+  const handleSearchChange = (event) => {
+    setSearch(event.target.value);
+    const filtered = countries.filter(country =>
+      country.name.common.toLowerCase().includes(event.target.value.toLowerCase())
+    );
+    if (filtered.length === 1) {
+      setSelectedCountry(filtered[0]);
     } else {
-      const personExists = persons.find(person => person.name === newName);
-      if (personExists) {
-        setErrorMessage(`'${newName}' ya está en la agenda telefónica`);
-        setTimeout(() => {
-          setErrorMessage(null);
-        }, 5000);
-        const updatedPerson = { ...personExists, name: newName, number: newNumber };
-        updatePerson(personExists.id, updatedPerson)
-          .then(() => {
-            setNewName('');
-            setNewNumber('');
-          })
-          .catch(error => console.error(error));
-      } else {
-        const personObject = {
-          name: newName,
-          number: newNumber,
-        };
-        addContact(personObject)
-          .then(returnedPerson => {
-            setPersons(persons.concat(returnedPerson));
-            setNewName('');
-            setNewNumber('');
-          })
-          .catch(error => console.error(error));
-      }
+      setSelectedCountry(null);
     }
   };
-  
 
-  const handleNameChange = (event) => {
-    setNewName(event.target.value);
-  };
-  const handleSearchChange = (event) => {
-    setSearchTerm(event.target.value);
-}
-  const handleNumberChange = (event) => {
-    setNewNumber(event.target.value);
+  const handleShowClick = (country) => {
+    setSelectedCountry(country);
   };
 
-  const edicion = (objeto) => {
-    setNewName(objeto.name);
-    setNewNumber(objeto.number);
-    setModEdit(true);
-    setPersonToUpdate(objeto);
-  };
-  const deletePerson = (id) => {
-    deleteContact(id)
-      .then(() => {
-        setPersons(persons.filter(person => person.id !== id));
-      })
-      .catch(error => console.error(error));
-  };
-  
+  const filteredCountries = countries.filter(country =>
+    country.name.common.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div>
-      <h1>Phonebook</h1>
-      <Notification message={errorMessage} />
-      <div>
-      <FilterComponent searchTerm={searchTerm} handleSearchChange={handleSearchChange}/>
-      </div>
-      <>
-      <h1>ADD CONTACT</h1>
-      <PersonForm
-        newName={newName}
-        newNumber={newNumber}
-        handleNameChange={handleNameChange}
-        handleNumberChange={handleNumberChange}
-        addOrUpdatePerson={addOrUpdatePerson}
-        modedit={modedit}
-      />
-      </>
-      <h1>Numbers</h1>
-      <Persons
-        persons={persons}
-        searchTerm={searchTerm}
-        edicion={edicion}
-        deletePerson={deletePerson}
-      />
+      <input value={search} onChange={handleSearchChange} />
+      {selectedCountry ? (
+        <CountryDetails country={selectedCountry} />
+      ) : filteredCountries.length > 10 ? (
+        <p>Too many matches, specify another filter</p>
+      ) : (
+        filteredCountries.map((country) => (
+          <div key={country.cca3}>
+            <span>{country.name.common}</span>
+            <button onClick={() => handleShowClick(country)}>Show</button>
+          </div>
+        ))
+      )}
     </div>
   );
 };
 
 export default App;
+
+
+
